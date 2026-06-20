@@ -108,7 +108,7 @@ These directives override default model behavior. Follow them in every interacti
 - **Point out production risks explicitly.** Identify concrete failure modes. Examples: "Failure mode: buffer overflow under back-to-back transactions" or "Observed failure mode: priority inversion when a low-priority task holds a mutex."
 - **Discuss power and determinism when relevant.** If the design uses polling, note the power cost vs. interrupt-driven wake. If it uses DMA, note that the CPU can sleep during transfers. If it uses heap allocation, dynamic task creation, or caches (Cortex-M7, M33 with cache option, M55, M85), flag the non-deterministic element and suggest how to bound it. State the sleep-vs-active duty cycle assumption for battery-powered hardware.
 
-- **Flag busy loops that poll indefinitely or waste CPU.** Bounded busy-waiting is acceptable for short, known-duration waits (< 10 µs), register synchronization in LL drivers, or microsecond-delay generation. If the wait exceeds ~100 µs or the duration is unbounded, prefer interrupts or DMA. Always pair polling loops with a timeout and error path.
+- **Flag busy loops that poll indefinitely or waste CPU.** Bounded busy-waiting is acceptable when the wait duration is short relative to CPU speed and peripheral latency, such as register synchronization or hardware stabilization delays. If the wait consumes a measurable portion of the CPU budget, blocks concurrent work, or has unbounded duration, prefer interrupts, DMA, or event-driven synchronization. Always pair polling loops with a timeout and error path.
 
 - **Never ignore HAL or LL return codes without justification.** Every HAL call returns a status. Check it. Propagate or handle it. Unchecked return codes mask I2C NACKs, SPI timeouts, and DMA errors. However, race conditions, clock misconfiguration, and cache coherency issues leave no error code to check — pair return-code discipline with the debugging mindset in section 10.
 
@@ -127,7 +127,7 @@ These directives override default model behavior. Follow them in every interacti
 **When to choose:**
 - **Poll:** Register synchronization in LL drivers, microsecond delays, initialization handshakes. Also useful in WFI sleep loops where any interrupt wakes the CPU.
 - **Interrupt:** Events at moderate frequency where the per-byte ISR overhead fits in the CPU budget. Measure before migrating to DMA.
-- **DMA:** High-rate or bursty peripherals (ADC continuous mode, SPI flash at > 10 MHz, DAC buffer streaming). Also enables deeper sleep — the CPU sleeps while the DMA controller runs.
+- **DMA:** High-rate or bursty peripherals where interrupt overhead exceeds the available CPU budget, such as continuous ADC sampling, large SPI transfers, memory streaming, or DAC waveform generation. Also enables deeper sleep — the CPU sleeps while the DMA controller runs.
 
 When uncertain, start with interrupts, measure CPU utilization, then migrate to DMA if needed.
 
@@ -191,7 +191,7 @@ When generating code, provide conceptual explanations when they materially impro
 
 - **Peripheral architecture:** Before writing driver code, describe the peripheral block diagram. Where is the data register? Is there a FIFO? How does the shift register relate to the data register? Explain the conceptual data flow.
 
-- **Register-level behavior:** When using HAL or LL, explain what the abstraction actually does on the bus. A HAL call that sets a pin high typically writes the BSRR register, then polls the SR flag. Convey the register-level operation beneath the abstraction.
+- **Register-level behavior:** When using HAL or LL, explain which registers are modified, which status flags are observed, and which hardware events are being waited on beneath the abstraction. The objective is to make the underlying hardware behavior visible rather than treating HAL or LL calls as black boxes.
 
 - **DMA operation:** Explain the full transfer lifecycle — request generation, arbitration, source address increment, destination address increment, completion interrupt, half-transfer interrupt, error interrupt. Describe the DMA stream state machine.
 
@@ -250,3 +250,15 @@ When working in an existing repository:
 - Prefer consistency over personal preference. A project with a consistent style is easier to maintain than one that follows "best practices" inconsistently.
 - Follow established naming conventions. If the project uses `HAL_` prefixed functions or snake_case, match that. Do not introduce CamelCase or different prefix schemes.
 - Preserve project style unless a clear, justified improvement outweighs the cost of inconsistency. When diverging, explain the rationale and limit the divergence to the specific scope that benefits.
+
+## 12. Design Philosophy
+
+This skill prioritizes:
+
+1. Correctness over cleverness.
+2. Measured evidence over assumptions.
+3. Maintainability over short-term convenience.
+4. Consistency with existing architecture over personal preference.
+5. Incremental improvement over large rewrites.
+
+When tradeoffs exist, document them explicitly and justify the selected approach.

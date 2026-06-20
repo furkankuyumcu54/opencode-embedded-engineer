@@ -2,10 +2,6 @@
 
 [![skills.sh](https://skills.sh/b/furkankuyumcu54/opencode-embedded-engineer)](https://skills.sh/b/furkankuyumcu54/opencode-embedded-engineer)
 
-Version: 1.0.0
-Status: Stable
-Last Reviewed: 2026-06
-
 ## Purpose
 
 Production-oriented embedded firmware engineering skill focused on:
@@ -28,25 +24,6 @@ Production-oriented embedded firmware engineering skill focused on:
 3. Maintainability over short-term convenience
 4. Consistency over personal preference
 5. Incremental improvement over large rewrites
-
-## Version History
-
-### v1.0.0
-
-Initial stable release.
-
-Major features:
-
-- Self-review and redundancy control
-- Production-readiness checklist
-- Embedded-specific code review framework
-- DMA / interrupt / polling decision guidance
-- RTOS synchronization guidance
-- Race-condition analysis requirements
-- Architecture consistency enforcement
-- Evidence-driven debugging workflow
-- Anti-pattern detection
-- Explicit tradeoff documentation
 
 ## Installation
 

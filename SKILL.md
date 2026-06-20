@@ -118,7 +118,7 @@ These directives override default model behavior. Follow them in every interacti
 
 | Method | CPU Cost | Latency | Complexity | Best When |
 |--------|----------|---------|------------|-----------|
-| Poll | 100% CPU during spin; near-zero with periodic check + WFI | Immediate | Minimal | Bounded short waits (<10 µs), debug, lowest-power sleep |
+| Poll | CPU usage proportional to polling strategy (up to 100% for tight spin loops) | Immediate | Minimal | Bounded short waits (<10 µs), debug, lowest-power sleep |
 | Interrupt | ISR_cycles × frequency (must budget this) | ISR dispatch + stacking | Moderate | Moderate data rates where ISR cost fits in CPU budget |
 | DMA | Near-zero during transfer; completion ISR is minimal | Completion callback | Highest | High data rates, large transfers, CPU must sleep during I/O |
 
@@ -180,7 +180,7 @@ When asked to review firmware, systematically check:
 - **Error propagation:** Does every function return a status? Are HAL errors checked? What happens when an I2C NACK occurs mid-transaction? What happens when a DMA transfer error fires?
 - **Volatile and atomic correctness:** Every variable shared between ISR and main context must be `volatile` to prevent compiler reordering and register caching. Every hardware register pointer must use `__IO` (or `volatile`). However, `volatile` alone does not guarantee atomicity. Verify atomicity guarantees against the target Cortex-M architecture, memory alignment, and vendor documentation. Single-core Cortex-M implementations provide native atomicity for some access widths when naturally aligned, but specifics vary by architecture revision and microcontroller. Variables larger than the native word width, or misaligned access, always require a critical section.
 - **Stack depth:** What is the worst-case call chain? How deep does interrupt nesting go? Is the configured stack size sufficient? An STM32 default stack (0x400 = 1 KB) may overflow under deep call chains with many local variables, especially with interrupt nesting. Verify stack usage with a linker map file or runtime stack watermark.
-- **ISR blocking:** No polling loops. No `HAL_Delay`. No `printf`. No dynamic memory allocation. ISRs should set a flag or give a semaphore and return.
+- **ISR blocking:** Avoid polling loops, blocking delays, standard printf implementations, and dynamic memory allocation inside ISRs. Any ISR operation must have bounded execution time, predictable latency, and a clearly defined worst-case execution time.
 - **Clock tree validation:** Are HSE/LSE oscillators configured with the correct capacitors for the board? Does the PLL output stay within the chip's specified frequency range? Are Flash wait states correct for the target frequency?
 - **GPIO configuration:** Is the pin mode correct (AF vs output vs input)? Is the pull configured? Is the output speed appropriate (high speed creates EMI)?
 - **Interrupt latency budget:** What is the maximum tolerable interrupt latency? Does the sum of all critical section lengths stay under this budget? Are long critical sections using `taskENTER_CRITICAL()` when `taskENTER_CRITICAL_FROM_ISR()` would suffice? Interrupts at or above `configMAX_SYSCALL_INTERRUPT_PRIORITY` are not masked by FreeRTOS critical sections — ensure this is intentional.
@@ -226,7 +226,7 @@ Before presenting firmware as production-ready, verify:
 - Clock tree configuration is validated against the target MCU's maximum frequencies and Flash wait states.
 - Task stack sizes account for worst-case interrupt nesting. If a task is preempted by an ISR that uses significant stack, that stack usage counts against the preempted task.
 - Startup code and vector table are correct for the target MCU. The `SystemInit` or `HAL_Init` sequence sets up the vector table offset register (VTOR) correctly if running from RAM.
-- All DMA streams have dedicated interrupt handlers. Shared interrupt lines between streams require reading the status register inside the ISR to identify the source.
+- DMA interrupt routing is verified. Shared interrupt lines require explicit source identification and handling. DMA completion, half-transfer, and error conditions must be distinguishable and handled correctly.
 - **Power model is understood.** What is the sleep vs. active duty cycle? Can the CPU enter sleep during DMA transfers? Are unused peripheral clocks gated? Is wake-up latency acceptable for the application?
 - **Determinism constraints are identified.** Are there heap allocations after scheduler start? Cache-dependent code paths on Cortex-M7 that vary in timing? Dynamic task creation? Document every non-deterministic element and its worst-case bound.
 - **Worst-case execution time (WCET) is considered.** For each time-critical path, what is the longest possible execution time accounting for interrupt preemption and cache misses? Budget headroom (typically 20-30%) beyond the measured average.

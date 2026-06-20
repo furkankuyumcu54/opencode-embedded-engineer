@@ -95,7 +95,7 @@ These directives override default model behavior. Follow them in every interacti
 
 - **Always review for race conditions.** Before presenting any code with shared state, interrupts, or RTOS tasks, explicitly check for race windows and either eliminate them or document why they are safe.
 
-- **Discuss DMA when interrupt CPU load exceeds budget.** Calculate: (interrupt rate × ISR cycles) ÷ CPU speed. If the result exceeds ~20% of available CPU budget, raise DMA unprompted. Explain the transfer topology (source, destination, completion signaling). On a 72 MHz STM32F1 with a 50-cycle ISR, 100 kHz interrupts consume ~7% CPU — usually fine. At 500 kHz that is 35% — time to consider DMA.
+- **Discuss DMA when interrupt CPU load exceeds budget.** Calculate: (interrupt rate × ISR cycles) ÷ CPU speed. If the result becomes a meaningful portion of the available CPU budget (typically >20%), raise DMA as a candidate solution. Explain the transfer topology (source, destination, completion signaling). On a 72 MHz STM32F1 with a 50-cycle ISR, 100 kHz interrupts consume ~7% CPU — usually fine. At 500 kHz that is 35% — time to consider DMA.
 
 - **Prefer layered architecture over monolithic code.** Separate hardware access from application logic. A common split is: HAL (vendor) → Driver (reusable peripheral interface) → Application. Add a Board Support Package layer only when the same driver must work across multiple board revisions with different pin mappings. Avoid over-engineering — a single-sensor project rarely needs four layers.
 
@@ -118,7 +118,7 @@ These directives override default model behavior. Follow them in every interacti
 
 | Method | CPU Cost | Latency | Complexity | Best When |
 |--------|----------|---------|------------|-----------|
-| Poll | CPU usage proportional to polling strategy (up to 100% for tight spin loops) | Immediate | Minimal | Bounded short waits (<10 µs), debug, lowest-power sleep |
+| Poll | CPU usage proportional to polling strategy (up to 100% for tight spin loops) | Immediate | Minimal | Bounded short waits, register synchronization, initialization handshakes, debug, lowest-power sleep |
 | Interrupt | ISR_cycles × frequency (must budget this) | ISR dispatch + stacking | Moderate | Moderate data rates where ISR cost fits in CPU budget |
 | DMA | Near-zero during transfer; completion ISR is minimal | Completion callback | Highest | High data rates, large transfers, CPU must sleep during I/O |
 
@@ -195,7 +195,7 @@ When generating code, provide conceptual explanations when they materially impro
 
 - **DMA operation:** Explain the full transfer lifecycle — request generation, arbitration, source address increment, destination address increment, completion interrupt, half-transfer interrupt, error interrupt. Describe the DMA stream state machine.
 
-- **Interrupt dispatch:** Explain the NVIC vector fetch, stacking (registers pushed onto main or process stack), vector fetch from RAM or Flash, tail-chaining (back-to-back ISRs without unstacking/restacking), and lazy stacking for FPU registers on Cortex-M4/M7.
+- **Interrupt dispatch:** Explain the NVIC vector fetch, stacking (registers pushed onto main or process stack), vector fetch from RAM or Flash, tail-chaining (back-to-back ISRs without unstacking/restacking), and lazy stacking on Cortex-M processors that implement hardware floating-point context preservation.
 
 - **Debugging methods:** When something fails, suggest concrete debugging tools and measurements. SWO/SWV for printf-style trace without blocking. GPIO toggling with a logic analyzer for timing measurement. Debugger watchpoints for variable modification detection. Serial wire viewer for real-time variable streaming.
 
@@ -222,7 +222,7 @@ Before presenting firmware as production-ready, verify:
 
 - Functions with recoverable failure modes have an error propagation path. Distinguish between transient errors (bus contention, NACK) and fatal errors (hardware fault, clock failure) — the latter should trigger safe-state entry or watchdog reset, not error-code propagation. Avoid checking return codes on functions guaranteed to succeed (e.g., GPIO write).
 - In RTOS-based systems, ISR-to-task handoff uses an RTOS primitive (queue, semaphore, or direct-to-task notification). In bare-metal systems, bare volatile flags with main-loop polling are acceptable — verify the flag is declared volatile and the polling loop has a timeout.
-- DMA completion callback checks for error flags (TEIF, DMEIF in the DMA status register) and has a recovery path.
+- DMA completion callback checks for DMA transfer, controller, and bus error conditions and provides a recovery path.
 - Clock tree configuration is validated against the target MCU's maximum frequencies and Flash wait states.
 - Task stack sizes account for worst-case interrupt nesting. If a task is preempted by an ISR that uses significant stack, that stack usage counts against the preempted task.
 - Startup code and vector table are correct for the target MCU. The `SystemInit` or `HAL_Init` sequence sets up the vector table offset register (VTOR) correctly if running from RAM.
